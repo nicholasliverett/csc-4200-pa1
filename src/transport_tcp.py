@@ -17,6 +17,10 @@ the PA1 brief.
 """
 
 
+import socket
+import time
+
+
 class ConnectionClosed(Exception):
     """The peer closed the stream.
 
@@ -33,31 +37,64 @@ class ConnectionClosed(Exception):
 def listen(bind_addr, port):
     """Start accepting sessions on bind_addr:port; return a listener.
     Remember SO_REUSEADDR (Specification, Section 9)."""
-    raise NotImplementedError
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((bind_addr, port))
+        sock.listen()
+    except Exception:
+        sock.close()
+        raise
+    return sock
 
 
 def accept(listener):
     """Wait for the next session; return (conn, peer_address)."""
-    raise NotImplementedError
+    conn, peer = listener.accept()
+    return conn, peer
 
 
 def connect(host, port):
     """Open a session to host:port; return conn."""
-    raise NotImplementedError
+    return socket.create_connection((host, port))
 
 
 def send_all(conn, data):
     """Send every byte of `data`, or raise an exception."""
-    raise NotImplementedError
+    conn.sendall(data)
 
 
 def recv_exact(conn, n):
     """Return exactly n bytes. Raise ConnectionClosed(clean=...) if the stream ends."""
-    raise NotImplementedError
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = conn.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionClosed(clean=(len(buf) == 0))
+        buf.extend(chunk)
+    return bytes(buf)
 
 
 def close(conn):
     """Close the session gracefully: shut down your sending side, read and
     discard whatever is still arriving until end-of-stream (or about a second
     passes), then close. Specification, Section 8.2 explains why."""
-    raise NotImplementedError
+    try:
+        try:
+            conn.shutdown(socket.SHUT_WR)
+        except OSError:
+            return
+
+        deadline = time.monotonic() + 1.0
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            conn.settimeout(remaining)
+            try:
+                if not conn.recv(4096):
+                    break
+            except (socket.timeout, OSError):
+                break
+    finally:
+        conn.close()

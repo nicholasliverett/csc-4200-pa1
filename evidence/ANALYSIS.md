@@ -55,13 +55,11 @@ your machine determines that value?
 
 | Frame | Flags | Seq (raw) | Ack (raw) |
 |---|---|---|---|
-| 25 | SYN | 1435062439 | 0 |
-| 26 | SYN, ACK | 106795330 | 1435062440 |
-| 27 | ACK | 1435062440 | 106795331 |
+| 25 | SYN | 3067228580 | 0 |
+| 26 | SYN, ACK | 1848765859 | 3067228581 |
+| 27 | ACK | 3067228581 | 1848765860 |
 
-The third segment’s ack is 106795331 because a SYN consumes one sequence number. The server’s SYN carried seq 106795330, so the next byte the client expects is 106795330 + 1. The same rule explains frame 26’s ack of 1435062440.
-
-The client advertised MSS 65495. That is the loopback interface’s MTU (65536, which you can see with ip link show lo) minus 40 bytes for the IPv4 and TCP headers. The kernel derives the MSS from the outgoing interface’s MTU, and this traffic never leaves lo.
+The third segment’s ack is 1848765860 because the server’s SYN (seq 1848765859) consumed one sequence number. The MSS is still 65495, derived from the loopback MTU of 65536 minus 40 bytes of headers.
 
 ## Q2. Your protocol on the wire
 
@@ -109,9 +107,10 @@ point to the place in your own code that deals with it.
 | Frames | Payload per frame |
 |---|---|
 | 33, 34 | 32,768 |
-| 36, 37, 39 | 47,616 |
-| 40 | 20,992 |
-| 42 | 32,776 |
+| 36 | 61,440 |
+| 38, 41 | 47,616 |
+| 39 | 22,016 |
+| 42 | 17,928 |
 
 These add up to 262,152 bytes, exactly the GET_OK message. The sizes are not all the same, and none of them reached the MSS of 65,495. They are best understood as captured frames rather than wire-sized segments, because loopback segmentation offload produces large, uneven frames.
 

@@ -2,7 +2,7 @@
 
 **Student:** Jackson Boyett (`Jackson-Boyett`) Nicholas Liverett (`nicholasliverett`)
 **Course:** CSC 4200 — Fall 2026
-**Language:** Python_
+**Language:** Python
 **Submitted commit:** _the SHA you paste into Canvas_
 
 ## Build and run

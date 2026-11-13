@@ -141,6 +141,13 @@ def run(args):
             status = EXIT_SERVER_ERROR
 
         request(conn, etp.BYE)
+
+        # Section 5, item 4: after BYE_OK the server closes; wait for its
+        # close (end-of-stream) before closing our own side.
+        try:
+            transport.recv_exact(conn, 1)
+        except transport.ConnectionClosed:
+            pass
         return status
 
     except ServerError as e:

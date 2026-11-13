@@ -82,7 +82,7 @@ are scored by people, using the bands in the PA1 brief.
 We are the authors of this submission. Except where this README or `AI_USE.md`
 says otherwise, we wrote, or rewrote and understand, every part of it — code,
 documents and evidence — and we can explain any line of it to the instructor or
-GTA. we are responsible for its correctness, including any part a
+GTA. We are responsible for its correctness, including any part a
 generative AI tool helped us produce. Our use of AI tools is disclosed in full in
 `AI_USE.md`. The capture and measurements in `evidence/` come from our own programs,
 run by us.

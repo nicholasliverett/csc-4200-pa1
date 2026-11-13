@@ -1,47 +1,49 @@
 # PA1 Design — ETP/1 Client and Server
 
-_One to two pages. Short, specific answers beat long general ones. Every section
-should be true of the code you submit. Delete these italic prompts when you write._
-
 ## 1. Architecture
 
-_Your modules and what calls what. A small diagram (ASCII is fine) or a list:
-which file holds the protocol (encode/decode), which holds the transport, which
-holds the server's session logic, which holds the client._
+client.py ──┐                      ┌── server.py
+            ├──► etp.py            │
+            └──► transport.py ◄────┘
+                      │  (one import line)
+                      ▼
+                 transport_tcp.py ──► socket (the only file that uses it)
 
 ## 2. The transport seam
 
-_Which file is your transport? List the six operations as you implemented them.
-Confirm that no other file calls the socket API. In two or three sentences: what
-would you have to change, and what would stay the same, when you swap TCP for your
-PA2 transport in the final project?_
+transport_tcp.py is the transport. Its six operations:
+
+listen: SO_REUSEADDR, bind, listen.
+accept: returns (conn, peer).
+connect: socket.create_connection.
+send_all: sendall.
+recv_exact: loops on recv until n bytes arrive; raises ConnectionClosed(clean=...) if the stream ends.
+close: shutdown(SHUT_WR), drain for about a second, then close.
+
+No other file uses the socket API. To switch to the PA2 transport we wrote a second module with the same six functions and change the import in transport.py. The ETP, server and client code stay the same.
 
 ## 3. Framing
 
-_How does your code read one ETP message from a byte stream? Where and how do you
-handle a header that arrives in pieces, or two messages that arrive in one read?
-Where do you check VERSION and LENGTH, and why before reading the payload?_
+read_message calls recv_exact(conn, 8) for the header, then recv_exact(conn, LENGTH) for the payload. recv_exact keeps reading until it has exactly n bytes, so split headers are reassembled and extra bytes stay in the socket for the next call, which handles messages packed together. VERSION and LENGTH are checked before the payload is read: a bad version means the payload can't be trusted, and an oversized LENGTH must never cause a large read or allocation. The server replies BAD_VERSION or TOO_LARGE, both fatal, in the Section 8.1 order.
 
 ## 4. Concurrency
 
-_Threads, processes or an event loop? What happens to everyone else when one
-client stalls half-way through a header? Is any state shared between sessions
-(for example, two clients PUT and GET the same file at once), and how is it
-protected?_
+One thread per connection. A client stalled mid-header blocks only its own thread; the accept loop and other sessions keep running. The only shared state is the root directory and a lock around log output. PUT writes to a temporary file whose name starts with a period (so it is never listed or fetched) and renames it into place with os.replace. A concurrent GET sees either the old file or the whole new one, and the last of two PUTs wins.
 
 ## 5. Errors and disconnects
 
-_How do fatal and non-fatal errors differ in your code? What happens when a client
-disconnects in the middle of a GET of a large file? (C: how did you deal with
-SIGPIPE?) How does your client choose its exit code?_
+Handlers raise ProtocolError(code); handle_session sends an ERROR with that code. If the code is in FATAL_ERRORS (BAD_VERSION, TOO_LARGE, NOT_READY) the session ends and transport.close closes gracefully. Otherwise the loop continues, since the whole payload has already been read. An unexpected handler exception becomes a non-fatal SERVER_ERROR.
+
+If a client disconnects during a large GET, sendall raises an OSError. It is caught at session level, logged to stderr, and the connection is closed; other sessions are unaffected. Python raises an exception instead of killing the process with SIGPIPE, so no signal handling was needed.
+
+Client exit codes: 0 success; 1 server ERROR; 2 any other failure (connect error, unreadable file, early close, bad response); 3 PUT digest mismatch.
 
 ## 6. Threat model
 
-_One paragraph. Who could attack an ETP/1 server, and how? Name one attack your
-server resists (and how), and one it does not. Chapter 5 §5.9 and the
-specification's Security Considerations are good starting points._
+Anyone who can reach the port can attack the server, and anyone on the path can read or alter the traffic, because ETP/1 has no authentication or encryption. The server resists path traversal: every name is checked against the strict Section 7 rule before it is joined to the root, so ../secret gets BAD_NAME. It does not resist resource exhaustion: one PUT can hold 16 MiB in memory, connections and threads are unlimited, and there is no idle timeout, so many stalled clients can tie up resources.
 
 ## 7. Testing
 
-_What did you test beyond `etp_selfcheck.py`? How? Name one bug your testing
-found, how you found it, and the fix._
+Beyond etp_selfcheck.py, we captured a GET session in Wireshark and checked the bytes, segmentation and teardown against the specification, and checked TIME-WAIT with ss. We also compared transferred files with the originals.
+
+The capture found a bug the self-check missed. It showed the client's FIN before the server's, with the client in TIME-WAIT, which contradicts Section 5 item 4 (the server closes after BYE_OK; the client waits for that close). The client closed immediately after BYE_OK, so whichever side closed first won a race. The fix: the client now reads until end-of-stream after BYE_OK before closing. The recapture shows the server's FIN first and 127.0.0.1:5000 in TIME-WAIT.

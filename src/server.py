@@ -106,7 +106,9 @@ def do_put(root, payload):
         raise ProtocolError(etp.BAD_NAME)
     
     path = os.path.join(root, name.decode("ascii"))
-    tmp = f"{path}.{threading.get_ident()}.tmp"
+    # Section 6.4: the temporary name must not be a valid ETP name, so it is
+    # never listed or fetched. A leading period guarantees that.
+    tmp = os.path.join(root, f".{name.decode('ascii')}.{threading.get_ident()}.tmp")
 
     try:
         with open(tmp, "wb") as f:

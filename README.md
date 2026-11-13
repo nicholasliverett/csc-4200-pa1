@@ -1,8 +1,8 @@
 # PA1 — ETP/1 Client and Server
 
-**Student:** _your full name_ (`your-github-username`)
-**Course:** CSC 4200 / CSC 5200 (delete one) — Fall 2026
-**Language:** _C or Python_
+**Student:** Jackson Boyett (`Jackson-Boyett`) Nicholas Liverett (`nicholasliverett`)
+**Course:** CSC 4200 — Fall 2026
+**Language:** Python_
 **Submitted commit:** _the SHA you paste into Canvas_
 
 ## Build and run
@@ -46,4 +46,4 @@ generative AI tool helped me produce. My use of AI tools is disclosed in full in
 `AI_USE.md`. The capture and measurements in `evidence/` come from my own programs,
 run by me.
 
-**Signed:** _full name_  **Date:** _date_
+**Signed:** Jackson Boyett, Nicholas Liverett  **Date:** 11/12/2026

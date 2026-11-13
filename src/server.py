@@ -44,7 +44,7 @@ def log(peer, label, status):
         sys.stdout.flush()
 
 
-def send(conn, peer, label, mtype, payload=b"", status=0):
+def reply(conn, peer, label, mtype, payload=b"", status=0):
     """Send one response and log it (one line per response)."""
 
     transport.send_all(conn, etp.encode(mtype, payload, status))
@@ -62,9 +62,17 @@ def do_list(root, payload):
     if payload:
         raise ProtocolError(etp.BAD_REQUEST)
     
-    names = [n for n in os.listdir(root) if os.path.isfile(os.path.join(root, n)) and etp.valid_name(n.encode("utf-8", "surrogateescape"))]
+    entries = []
+    for n in os.listdir(root):
+        raw = os.fsencode(n)
+        full = os.path.join(root, n)
+        if etp.valid_name(raw) and os.path.isfile(full):
+            entries.append((raw, os.path.getsize(full)))
 
-    return etp.LIST_OK, "\n".join(sorted(names)).encode()
+    # Sorted by byte value of the name (so "Zulu.txt" < "alpha.txt").
+    entries.sort(key=lambda e: e[0])
+    body = b"".join(raw + b"\t" + str(size).encode() + b"\n" for raw, size in entries)
+    return etp.LIST_OK, body
 
 
 def do_get(root, payload):
@@ -85,11 +93,15 @@ def do_get(root, payload):
 
 
 def do_put(root, payload):
-    name, sep, data = payload.partition(b"\0")   
-
-    if not sep:
+    # PUT payload: NAMELEN (u16, big-endian) | NAME | DATA
+    if len(payload) < 2:
         raise ProtocolError(etp.BAD_REQUEST)
-    
+    nlen = int.from_bytes(payload[:2], "big")
+    if len(payload) < 2 + nlen:
+        raise ProtocolError(etp.BAD_REQUEST)
+    name = payload[2:2 + nlen]
+    data = payload[2 + nlen:]
+
     if not etp.valid_name(name):
         raise ProtocolError(etp.BAD_NAME)
     
@@ -139,28 +151,28 @@ def handle_session(conn, peer, root):
                     if greeted:
                         raise ProtocolError(etp.BAD_REQUEST)
                     greeted = True
-                    send(conn, peer, label, etp.HELLO_OK)
+                    reply(conn, peer, label, etp.HELLO_OK, payload)
                     continue
                 if not greeted:
                     raise ProtocolError(etp.NOT_READY)
 
                 if mtype == etp.BYE:
-                    send(conn, peer, label, etp.BYE_OK)
+                    reply(conn, peer, label, etp.BYE_OK)
                     return
                 
                 handler = {etp.LIST: do_list, etp.GET: do_get, etp.PUT: do_put}[mtype]
                 rtype, body = handler(root, payload)
-                send(conn, peer, label, rtype, body)
+                reply(conn, peer, label, rtype, body)
 
             except ProtocolError as e:
-                send(conn, peer, label, etp.ERROR, b"", e.code)
+                reply(conn, peer, label, etp.ERROR, b"", e.code)
                 if e.code in etp.FATAL_ERRORS:
                     return
                 
             except OSError:
                 raise
             except Exception:
-                send(conn, peer, label, etp.ERROR, b"", etp.SERVER_ERROR)
+                reply(conn, peer, label, etp.ERROR, b"", etp.SERVER_ERROR)
 
     except transport.ConnectionClosed as e:
         if not e.clean:

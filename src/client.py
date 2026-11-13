@@ -94,7 +94,7 @@ def do_get(conn, args):
 
 
 def do_put(conn, args, data):
-    body = request(conn, etp.PUT, args.remote.encode() + b"\0" + data)
+    body = request(conn, etp.PUT, len(args.remote.encode()).to_bytes(2, "big") + args.remote.encode() + data)
     theirs = digest_hex(body)
     ours = hashlib.sha256(data).hexdigest()
     print(theirs, flush=True)
@@ -117,7 +117,7 @@ def run(args):
         except OSError as e:
             print(f"etp-client: cannot read {args.local!r}: {e.strerror}", file=sys.stderr)
             return EXIT_FAILURE
-        if len(data) + len(args.remote.encode()) + 1 > etp.MAX_LEN:
+        if len(data) + len(args.remote.encode()) + 2 > etp.MAX_LEN:
             print("etp-client: file is too large to send", file=sys.stderr)
             return EXIT_FAILURE
 
